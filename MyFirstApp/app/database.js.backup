@@ -1,0 +1,83 @@
+import * as SecureStore from 'expo-secure-store';
+
+const STORAGE_KEY = 'students';
+
+// Initialize
+export const initDatabase = async () => {
+  try {
+    const existing = await SecureStore.getItemAsync(STORAGE_KEY);
+    if (existing === null) {
+      await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify([]));
+      console.log('✅ Database initialized');
+    }
+    return true;
+  } catch (error) {
+    console.error('Init error:', error);
+    return false;
+  }
+};
+
+// Add student
+export const addStudent = async (name, email, phone, course) => {
+  try {
+    console.log('📝 Adding student:', name);
+    
+    // Get existing students
+    const existingData = await SecureStore.getItemAsync(STORAGE_KEY);
+    let students = [];
+    
+    if (existingData !== null) {
+      students = JSON.parse(existingData);
+    }
+    
+    // Create new student
+    const newStudent = {
+      id: Date.now().toString(),
+      name: name,
+      email: email,
+      phone: phone,
+      course: course,
+    };
+    
+    // Add to array
+    students.push(newStudent);
+    
+    // Save back
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(students));
+    
+    console.log('✅ Student saved! Total:', students.length);
+    return { success: true };
+    
+  } catch (error) {
+    console.error('❌ Save error:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Get students
+export const getStudents = async () => {
+  try {
+    const data = await SecureStore.getItemAsync(STORAGE_KEY);
+    const students = data ? JSON.parse(data) : [];
+    console.log('📚 Loaded students:', students.length);
+    return { success: true, data: students };
+  } catch (error) {
+    console.error('Load error:', error);
+    return { success: false, data: [] };
+  }
+};
+
+// Delete student
+export const deleteStudent = async (id) => {
+  try {
+    const data = await SecureStore.getItemAsync(STORAGE_KEY);
+    let students = data ? JSON.parse(data) : [];
+    students = students.filter(s => s.id !== id);
+    await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify(students));
+    console.log('🗑️ Deleted student:', id);
+    return { success: true };
+  } catch (error) {
+    console.error('Delete error:', error);
+    return { success: false };
+  }
+};
