@@ -4,17 +4,32 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as Font from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { initDatabase } from './services/database';
 
 // Import screens
 import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 import DashboardScreen from './screens/DashboardScreen';
 import TrackingScreen from './screens/TrackingScreen';
 import ShipmentsScreen from './screens/ShipmentsScreen';
 import ReportsScreen from './screens/ReportsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import AddShipmentScreen from './screens/AddShipmentScreen';
+import EditShipmentScreen from './screens/EditShipmentScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+
+// Stack Navigator for Shipments section
+function ShipmentsStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="ShipmentsList" component={ShipmentsScreen} />
+      <Stack.Screen name="AddShipment" component={AddShipmentScreen} />
+      <Stack.Screen name="EditShipment" component={EditShipmentScreen} />
+    </Stack.Navigator>
+  );
+}
 
 // Tab Navigator for main screens
 function MainTabs({ setIsLoggedIn }) {
@@ -43,7 +58,7 @@ function MainTabs({ setIsLoggedIn }) {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Tracking" component={TrackingScreen} />
-      <Tab.Screen name="Shipments" component={ShipmentsScreen} />
+      <Tab.Screen name="Shipments" component={ShipmentsStack} />
       <Tab.Screen name="Reports" component={ReportsScreen} />
       <Tab.Screen name="Profile">
         {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
@@ -65,6 +80,12 @@ export default function App() {
     loadFonts();
   }, []);
 
+  useEffect(() => {
+    if (fontsLoaded) {
+      initDatabase();
+    }
+  }, [fontsLoaded]);
+
   if (!fontsLoaded) {
     return null;
   }
@@ -73,9 +94,14 @@ export default function App() {
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         {!isLoggedIn ? (
-          <Stack.Screen name="Login">
-            {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-          </Stack.Screen>
+          <>
+            <Stack.Screen name="Login">
+              {(props) => <LoginScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            </Stack.Screen>
+            <Stack.Screen name="Register">
+              {(props) => <RegisterScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
+            </Stack.Screen>
+          </>
         ) : (
           <Stack.Screen name="Main">
             {(props) => <MainTabs {...props} setIsLoggedIn={setIsLoggedIn} />}
