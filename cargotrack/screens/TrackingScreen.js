@@ -1,116 +1,299 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
   ScrollView,
-  TouchableOpacity
+  Alert,
+  RefreshControl
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { fetchRealTimeTracking, fetchTrackingHistory } from '../services/api';
 
 export default function TrackingScreen() {
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Live Tracking</Text>
-      </View>
+  const [trackingNumber, setTrackingNumber] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [shipment, setShipment] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const intervalRef = useRef(null);
+
+  // Fetch tracking data
+  const fetchTrackingData = async (trackNum, showLoading = true) => {
+    if (showLoading) setLoading(true);
+    
+    const result = await fetchRealTimeTracking(trackNum);
+    if (result.success) {
+      setShipment(result.data);
+      setLastUpdated(new Date().toLocaleTimeString());
       
-      <View style={styles.trackingIdCard}>
-        <Text style={styles.cargoId}>Cargo ID: CRG-1845</Text>
+      const historyResult = await fetchTrackingHistory(trackNum);
+      if (historyResult.success) {
+        setHistory(historyResult.data);
+      }
+    } else {
+      if (showLoading) {
+        Alert.alert('Error', 'Shipment not found. Please check the tracking number.');
+      }
+      setShipment(null);
+      setHistory([]);
+    }
+    
+    if (showLoading) setLoading(false);
+  };
+
+  // Handle track button press
+  const handleTrackShipment = async () => {
+    if (!trackingNumber.trim()) {
+      Alert.alert('Error', 'Please enter a tracking number');
+      return;
+    }
+
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    await fetchTrackingData(trackingNumber, true);
+
+    // Start auto-refresh every 30 seconds
+    intervalRef.current = setInterval(() => {
+      if (shipment || trackingNumber) {
+        fetchTrackingData(trackingNumber, false);
+      }
+    }, 30000);
+  };
+
+  // Pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    if (trackingNumber) {
+      await fetchTrackingData(trackingNumber, false);
+    }
+    setRefreshing(false);
+  };
+
+  // Export shipment report
+  const exportReport = () => {
+    if (!shipment) return;
+    
+    const report = {
+      exportedAt: new Date().toISOString(),
+      trackingNumber: shipment.trackingNumber,
+      status: shipment.status,
+      currentLocation: shipment.currentLocation,
+      lastUpdate: shipment.lastUpdate,
+      estimatedDelivery: shipment.estimatedDelivery,
+      history: history,
+      generatedBy: 'CargoTrack Pro App'
+    };
+    
+    Alert.alert(
+      '✅ Report Generated',
+      `Shipment report for ${shipment.trackingNumber} is ready!\n\nData has been logged to console.`,
+      [{ text: 'OK' }]
+    );
+    
+    console.log('📦 === SHIPMENT REPORT === 📦');
+    console.log(JSON.stringify(report, null, 2));
+    console.log('📦 === END REPORT === 📦');
+  };
+
+  // Clean up interval on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, []);
+
+  const getStatusColor = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'delivered': return '#4CAF50';
+      case 'out for delivery': return '#FF9800';
+      case 'in transit': return '#2196F3';
+      case 'arrived at hub': return '#9C27B0';
+      case 'pending': return '#FFC107';
+      default: return '#9E9E9E';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'delivered': return 'checkmark-circle';
+      case 'out for delivery': return 'car';
+      case 'in transit': return 'airplane';
+      case 'arrived at hub': return 'business';
+      default: return 'time';
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Track Shipment</Text>
+            <Text style={styles.subtitle}>Real-time tracking with API</Text>
+          </View>
+          {shipment && (
+            <TouchableOpacity onPress={exportReport} style={styles.exportButton}>
+              <Ionicons name="download-outline" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
-      <View style={styles.routeCard}>
-        <Text style={styles.routeTitle}>Route Information</Text>
-        <View style={styles.routePoints}>
-          <View style={styles.routePoint}>
-            <View style={[styles.dot, styles.originDot]} />
-            <View style={styles.routeLine} />
-          </View>
-          <View style={styles.routePoint}>
-            <View style={styles.routeLine} />
-            <View style={[styles.dot, styles.destinationDot]} />
-          </View>
+      <View style={styles.searchSection}>
+        <View style={styles.inputContainer}>
+          <Ionicons name="search-outline" size={20} color="#666" />
+          <TextInput
+            style={styles.input}
+            placeholder="Enter Tracking Number (e.g., CRG-1842)"
+            placeholderTextColor="#999"
+            value={trackingNumber}
+            onChangeText={setTrackingNumber}
+            autoCapitalize="none"
+          />
         </View>
-        <View style={styles.locations}>
-          <Text style={styles.locationText}>Origin: New York, NY</Text>
-          <Text style={styles.locationText}>Destination: Miami, FL</Text>
-        </View>
+        <TouchableOpacity 
+          style={styles.trackButton} 
+          onPress={handleTrackShipment}
+          disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.trackButtonText}>Track</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.shipmentCard}>
-        <View style={styles.shipmentHeader}>
-          <Text style={styles.shipmentId}>CRG-1845</Text>
-          <View style={styles.transitBadge}>
-            <Text style={styles.transitText}>In Transit</Text>
-          </View>
-        </View>
-        <Text style={styles.shipmentType}>Electronics Shipment</Text>
+      <ScrollView 
+        style={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }>
         
-        <View style={styles.infoRow}>
-          <Ionicons name="person-outline" size={22} color="#007AFF" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Driver Name</Text>
-            <Text style={styles.infoValue}>Michael Roberts</Text>
-          </View>
-        </View>
+        {shipment && (
+          <>
+            {/* Last Updated Timestamp */}
+            {lastUpdated && (
+              <View style={styles.updateBadge}>
+                <Ionicons name="refresh-outline" size={14} color="#007AFF" />
+                <Text style={styles.updateText}>Last updated: {lastUpdated}</Text>
+                <Text style={styles.autoRefreshText}>Auto-refresh every 30s</Text>
+              </View>
+            )}
 
-        <View style={styles.infoRow}>
-          <Ionicons name="location-outline" size={22} color="#007AFF" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Current Location</Text>
-            <Text style={styles.infoValue}>Interstate 95, Baltimore, MD</Text>
-            <Text style={styles.updateTime}>Last updated: 5 minutes ago</Text>
-          </View>
-        </View>
+            {/* Current Status Card */}
+            <View style={styles.statusCard}>
+              <View style={styles.statusHeader}>
+                <Ionicons name="cube-outline" size={24} color="#007AFF" />
+                <Text style={styles.trackingNumber}>{shipment.trackingNumber}</Text>
+              </View>
+              
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(shipment.status) }]}>
+                <Ionicons name={getStatusIcon(shipment.status)} size={20} color="#fff" />
+                <Text style={styles.statusText}>{shipment.status}</Text>
+              </View>
 
-        <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={22} color="#007AFF" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Estimated Time of Arrival</Text>
-            <Text style={styles.etaValue}>2h 45m</Text>
-            <Text style={styles.expectedTime}>Expected: Today, 4:30 PM</Text>
-          </View>
-        </View>
+              <View style={styles.infoRow}>
+                <Ionicons name="location-outline" size={20} color="#666" />
+                <Text style={styles.infoLabel}>Current Location:</Text>
+                <Text style={styles.infoValue}>{shipment.currentLocation}</Text>
+              </View>
 
-        <View style={styles.infoRow}>
-          <Ionicons name="navigate-outline" size={22} color="#007AFF" />
-          <View style={styles.infoContent}>
-            <Text style={styles.infoLabel}>Distance Remaining</Text>
-            <Text style={styles.infoValue}>142 miles</Text>
+              <View style={styles.infoRow}>
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+                <Text style={styles.infoLabel}>Last Update:</Text>
+                <Text style={styles.infoValue}>{shipment.lastUpdate}</Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <Ionicons name="time-outline" size={20} color="#666" />
+                <Text style={styles.infoLabel}>Est. Delivery:</Text>
+                <Text style={styles.infoValue}>{shipment.estimatedDelivery}</Text>
+              </View>
+            </View>
+
+            {/* Tracking History */}
+            {history.length > 0 && (
+              <View style={styles.historyCard}>
+                <Text style={styles.historyTitle}>Tracking History</Text>
+                {history.map((event, index) => (
+                  <View key={index} style={styles.timelineItem}>
+                    <View style={styles.timelineLeft}>
+                      <View style={styles.timelineDot} />
+                      {index !== history.length - 1 && <View style={styles.timelineLine} />}
+                    </View>
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.eventTime}>{event.time}</Text>
+                      <Text style={styles.eventStatus}>{event.status}</Text>
+                      <Text style={styles.eventLocation}>{event.location}</Text>
+                      <Text style={styles.eventDesc}>{event.description}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {!shipment && !loading && (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="map-outline" size={60} color="#ccc" />
+            <Text style={styles.emptyText}>Enter a tracking number to track your shipment</Text>
+            <Text style={styles.emptySubText}>Example: CRG-1842, CRG-1843, CRG-1844</Text>
           </View>
-        </View>
-      </View>
-    </ScrollView>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8f9fc' },
-  header: { backgroundColor: '#007AFF', padding: 20, paddingTop: 50, paddingBottom: 30 },
-  headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#fff' },
-  trackingIdCard: { backgroundColor: '#fff', borderRadius: 12, marginHorizontal: 15, marginTop: -20, padding: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5, elevation: 3 },
-  cargoId: { fontSize: 16, fontWeight: '600', color: '#333' },
-  routeCard: { backgroundColor: '#fff', borderRadius: 12, marginHorizontal: 15, marginTop: 15, padding: 15 },
-  routeTitle: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 15 },
-  routePoints: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  routePoint: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  originDot: { backgroundColor: '#34C759' },
-  destinationDot: { backgroundColor: '#FF3B30' },
-  routeLine: { flex: 1, height: 2, backgroundColor: '#007AFF', marginHorizontal: 5 },
-  locations: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 },
-  locationText: { fontSize: 12, color: '#666' },
-  shipmentCard: { backgroundColor: '#fff', borderRadius: 12, marginHorizontal: 15, marginTop: 15, marginBottom: 30, padding: 15 },
-  shipmentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
-  shipmentId: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  transitBadge: { backgroundColor: '#007AFF20', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
-  transitText: { color: '#007AFF', fontWeight: '600' },
-  shipmentType: { fontSize: 14, color: '#666', marginBottom: 20 },
-  infoRow: { flexDirection: 'row', gap: 15, marginBottom: 20 },
-  infoContent: { flex: 1 },
-  infoLabel: { fontSize: 12, color: '#999', marginBottom: 2 },
-  infoValue: { fontSize: 16, color: '#333', fontWeight: '500' },
-  updateTime: { fontSize: 11, color: '#999', marginTop: 2 },
-  etaValue: { fontSize: 24, fontWeight: 'bold', color: '#007AFF', marginVertical: 2 },
-  expectedTime: { fontSize: 12, color: '#666' },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  header: { padding: 20, paddingBottom: 10 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: 'bold', color: '#333' },
+  subtitle: { fontSize: 14, color: '#666', marginTop: 4 },
+  exportButton: { padding: 8, backgroundColor: '#f0f0f0', borderRadius: 25 },
+  searchSection: { flexDirection: 'row', paddingHorizontal: 20, gap: 12, marginBottom: 20 },
+  inputContainer: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 15, borderWidth: 1, borderColor: '#e0e0e0' },
+  input: { flex: 1, paddingVertical: 14, fontSize: 16, marginLeft: 10 },
+  trackButton: { backgroundColor: '#007AFF', borderRadius: 12, paddingHorizontal: 24, justifyContent: 'center', alignItems: 'center' },
+  trackButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  content: { flex: 1, paddingHorizontal: 20 },
+  updateBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E3F2FD', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 12, gap: 6, flexWrap: 'wrap' },
+  updateText: { fontSize: 12, color: '#007AFF' },
+  autoRefreshText: { fontSize: 11, color: '#666', marginLeft: 'auto' },
+  statusCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16 },
+  statusHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  trackingNumber: { fontSize: 18, fontWeight: 'bold', color: '#007AFF', marginLeft: 10 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 25, marginBottom: 16, gap: 8 },
+  statusText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  infoLabel: { fontSize: 14, color: '#666', marginLeft: 8, width: 110 },
+  infoValue: { fontSize: 14, color: '#333', fontWeight: '500', flex: 1 },
+  historyCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 20 },
+  historyTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 16 },
+  timelineItem: { flexDirection: 'row', marginBottom: 20 },
+  timelineLeft: { width: 30, alignItems: 'center', position: 'relative' },
+  timelineDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#007AFF', marginTop: 4 },
+  timelineLine: { width: 2, flex: 1, backgroundColor: '#e0e0e0', position: 'absolute', top: 20, bottom: -20, left: 14 },
+  timelineContent: { flex: 1, paddingBottom: 10 },
+  eventTime: { fontSize: 12, color: '#999', marginBottom: 4 },
+  eventStatus: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 2 },
+  eventLocation: { fontSize: 14, color: '#666', marginBottom: 2 },
+  eventDesc: { fontSize: 12, color: '#999' },
+  emptyContainer: { alignItems: 'center', paddingTop: 60 },
+  emptyText: { color: '#999', fontSize: 16, marginTop: 16, textAlign: 'center' },
+  emptySubText: { color: '#ccc', fontSize: 14, marginTop: 8, textAlign: 'center' },
 });

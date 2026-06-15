@@ -1,57 +1,123 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Dimensions
+  RefreshControl,
+  Dimensions,
+  Alert
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { fetchDashboardStats } from '../services/api';
+import { getAllShipments } from '../services/database';
 
 const { width } = Dimensions.get('window');
 
 export default function DashboardScreen({ navigation }) {
-  const stats = [
-    { label: 'Active Shipments', value: '24', icon: 'cube-outline', color: '#007AFF' },
-    { label: 'Delivered Today', value: '12', icon: 'checkmark-circle-outline', color: '#34C759' },
-    { label: 'Delayed Shipments', value: '3', icon: 'alert-circle-outline', color: '#FF3B30' },
-  ];
+  const [stats, setStats] = useState({
+    totalShipments: 0,
+    activeShipments: 0,
+    deliveredToday: 0,
+    delayedShipments: 0,
+    recentShipments: []
+  });
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [localCount, setLocalCount] = useState(0);
 
-  const recentActivities = [
-    { id: 'CRG-1842', status: 'Delivered', time: '2 hours ago', statusColor: '#34C759' },
-    { id: 'CRG-1843', status: 'In Transit', time: '4 hours ago', statusColor: '#007AFF' },
-    { id: 'CRG-1844', status: 'Delayed', time: '6 hours ago', statusColor: '#FF3B30' },
+  // Load dashboard data from API and local database
+  const loadDashboardData = async () => {
+    setLoading(true);
+    
+    // Fetch from API
+    const apiResult = await fetchDashboardStats();
+    if (apiResult.success) {
+      setStats(apiResult.data);
+    }
+    
+    // Fetch local shipment count
+    const localResult = await getAllShipments();
+    if (localResult.success) {
+      setLocalCount(localResult.data.length);
+    }
+    
+    setLoading(false);
+  };
+
+  // Pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboardData();
+    setRefreshing(false);
+  }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadDashboardData();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const statsCards = [
+    { 
+      label: 'Total Shipments', 
+      value: stats.totalShipments + localCount, 
+      icon: 'cube-outline', 
+      color: '#007AFF',
+      bgColor: '#E3F2FD'
+    },
+    { 
+      label: 'Active Shipments', 
+      value: stats.activeShipments, 
+      icon: 'trending-up-outline', 
+      color: '#FF9800',
+      bgColor: '#FFF3E0'
+    },
+    { 
+      label: 'Delivered Today', 
+      value: stats.deliveredToday, 
+      icon: 'checkmark-circle-outline', 
+      color: '#4CAF50',
+      bgColor: '#E8F5E9'
+    },
+    { 
+      label: 'Delayed', 
+      value: stats.delayedShipments, 
+      icon: 'alert-circle-outline', 
+      color: '#F44336',
+      bgColor: '#FFEBEE'
+    },
   ];
 
   const quickActions = [
-    { name: 'Track Cargo', icon: 'map-outline', color: '#007AFF', screen: 'Tracking' },
-    { name: 'Create Shipment', icon: 'add-circle-outline', color: '#34C759', screen: 'Shipments' },
-    { name: 'View Reports', icon: 'stats-chart-outline', color: '#FF9500', screen: 'Reports' },
+    { name: 'Track Cargo', icon: 'map-outline', color: '#007AFF', screen: 'Tracking', isNested: false },
+    { name: 'New Shipment', icon: 'add-circle-outline', color: '#4CAF50', screen: 'AddShipment', isNested: true },
+    { name: 'View All', icon: 'list-outline', color: '#FF9800', screen: 'Shipments', isNested: false },
+    { name: 'Reports', icon: 'stats-chart-outline', color: '#9C27B0', screen: 'Reports', isNested: false },
   ];
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      {/* Blue Header Section */}
-      <View style={styles.blueHeader}>
-        <View style={styles.headerContent}>
-          <View>
-            <Text style={styles.welcomeText}>Welcome back,</Text>
-            <Text style={styles.userName}>John Anderson</Text>
-            <Text style={styles.userRole}>Logistics Manager</Text>
-          </View>
-          <View style={styles.avatar}>
-            <Ionicons name="person-circle-outline" size={50} color="#fff" />
-          </View>
-        </View>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.greeting}>Welcome back!</Text>
+        <Text style={styles.title}>CargoTrack Dashboard</Text>
+        <Text style={styles.subtitle}>Real-time shipment tracking</Text>
       </View>
 
-      {/* Stats Cards - overlapping the blue header */}
-      <View style={styles.statsContainer}>
-        {stats.map((stat, index) => (
-          <View key={index} style={styles.statCard}>
-            <View style={[styles.iconCircle, { backgroundColor: stat.color + '15' }]}>
-              <Ionicons name={stat.icon} size={28} color={stat.color} />
+      {/* Stats Grid */}
+      <View style={styles.statsGrid}>
+        {statsCards.map((stat, index) => (
+          <View key={index} style={[styles.statCard, { backgroundColor: stat.bgColor }]}>
+            <View style={[styles.statIcon, { backgroundColor: stat.color + '20' }]}>
+              <Ionicons name={stat.icon} size={24} color={stat.color} />
             </View>
             <Text style={styles.statValue}>{stat.value}</Text>
             <Text style={styles.statLabel}>{stat.label}</Text>
@@ -59,251 +125,119 @@ export default function DashboardScreen({ navigation }) {
         ))}
       </View>
 
-      {/* Live Shipment Map Section */}
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Live Shipment Map</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Tracking')}>
-            <Text style={styles.linkText}>View Full Map →</Text>
-          </TouchableOpacity>
-        </View>
-        <TouchableOpacity 
-          style={styles.mapBox}
-          onPress={() => navigation.navigate('Tracking')}
-        >
-          <Ionicons name="map" size={50} color="#007AFF" />
-          <Text style={styles.mapText}>24 active cargo locations</Text>
-          <Text style={styles.mapSubText}>Tap to view live tracking →</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Quick Actions Section */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Quick Actions</Text>
-        <View style={styles.actionsRow}>
+      {/* Quick Actions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.actionsGrid}>
           {quickActions.map((action, index) => (
-            <TouchableOpacity 
-              key={index} 
-              style={styles.actionButton}
-              onPress={() => navigation.navigate(action.screen)}
+            <TouchableOpacity
+              key={index}
+              style={styles.actionCard}
+              onPress={() => {
+                if (action.isNested) {
+                  navigation.navigate('Shipments', { screen: action.screen });
+                } else {
+                  navigation.navigate(action.screen);
+                }
+              }}
             >
               <View style={[styles.actionIcon, { backgroundColor: action.color + '15' }]}>
                 <Ionicons name={action.icon} size={28} color={action.color} />
               </View>
-              <Text style={styles.actionText}>{action.name}</Text>
+              <Text style={styles.actionName}>{action.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
       </View>
 
-      {/* Recent Activity Section */}
-      <View style={[styles.card, styles.lastCard]}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Recent Activity</Text>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>View All</Text>
+      {/* Recent Shipments from API */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Recent Shipments</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Shipments')}>
+            <Text style={styles.seeAll}>See All →</Text>
           </TouchableOpacity>
         </View>
-        {recentActivities.map((activity, index) => (
-          <TouchableOpacity 
-            key={index} 
-            style={styles.activityItem}
-            onPress={() => navigation.navigate('Tracking')}
+        
+        {stats.recentShipments.slice(0, 3).map((shipment, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.recentCard}
+            onPress={() => Alert.alert('Shipment Details', `Tracking: ${shipment.trackingNumber}\nStatus: ${shipment.status}\nFrom: ${shipment.origin}\nTo: ${shipment.destination}`)}
           >
-            <View style={styles.activityLeft}>
-              <Text style={styles.activityId}>{activity.id}</Text>
-              <Text style={[styles.activityStatus, { color: activity.statusColor }]}>
-                {activity.status}
-              </Text>
+            <View style={styles.recentHeader}>
+              <Text style={styles.recentTracking}>{shipment.trackingNumber}</Text>
+              <View style={[
+                styles.recentStatus, 
+                { backgroundColor: 
+                  shipment.status === 'Delivered' ? '#4CAF50' : 
+                  shipment.status === 'In Transit' ? '#FF9800' : '#9E9E9E'
+                }
+              ]}>
+                <Text style={styles.recentStatusText}>{shipment.status}</Text>
+              </View>
             </View>
-            <Text style={styles.activityTime}>{activity.time}</Text>
+            <Text style={styles.recentRoute}>{shipment.origin} → {shipment.destination}</Text>
           </TouchableOpacity>
         ))}
+
+        {stats.recentShipments.length === 0 && (
+          <View style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={40} color="#ccc" />
+            <Text style={styles.emptyText}>No recent shipments</Text>
+            <TouchableOpacity 
+              style={styles.emptyButton}
+              onPress={() => navigation.navigate('Shipments', { screen: 'AddShipment' })}>
+              <Text style={styles.emptyButtonText}>Add Shipment</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+
+      {/* Local Database Info */}
+      <View style={styles.infoCard}>
+        <Ionicons name="server-outline" size={24} color="#007AFF" />
+        <View style={styles.infoContent}>
+          <Text style={styles.infoTitle}>Local Storage</Text>
+          <Text style={styles.infoText}>{localCount} shipments saved locally</Text>
+        </View>
+        <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F2F4F8',
-  },
-  // Blue Header
-  blueHeader: {
-    backgroundColor: '#007AFF',
-    paddingTop: 50,
-    paddingBottom: 60,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 4,
-  },
-  userRole: {
-    fontSize: 13,
-    color: '#fff',
-    opacity: 0.8,
-    marginTop: 2,
-  },
-  avatar: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Stats Cards
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginTop: -30,
-  },
-  statCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 14,
-    alignItems: 'center',
-    width: (width - 50) / 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  iconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
-  statValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#666',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  // Cards
-  card: {
-    backgroundColor: '#fff',
-    marginHorizontal: 16,
-    marginTop: 16,
-    borderRadius: 16,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  lastCard: {
-    marginBottom: 30,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  linkText: {
-    color: '#007AFF',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  // Map Box
-  mapBox: {
-    height: 140,
-    backgroundColor: '#F0F8FF',
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#007AFF20',
-  },
-  mapText: {
-    marginTop: 10,
-    color: '#444',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  mapSubText: {
-    marginTop: 5,
-    color: '#007AFF',
-    fontSize: 12,
-  },
-  // Quick Actions
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  actionButton: {
-    alignItems: 'center',
-    width: (width - 70) / 3,
-  },
-  actionIcon: {
-    width: 55,
-    height: 55,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  actionText: {
-    fontSize: 12,
-    color: '#444',
-    fontWeight: '500',
-  },
-  // Recent Activity
-  activityItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  activityLeft: {
-    flex: 1,
-  },
-  activityId: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  activityStatus: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  activityTime: {
-    fontSize: 12,
-    color: '#999',
-  },
+  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  header: { padding: 20, paddingTop: 40, backgroundColor: '#fff', borderBottomLeftRadius: 24, borderBottomRightRadius: 24, marginBottom: 20 },
+  greeting: { fontSize: 14, color: '#666', marginBottom: 4 },
+  title: { fontSize: 24, fontWeight: 'bold', color: '#333' },
+  subtitle: { fontSize: 12, color: '#999', marginTop: 4 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 12 },
+  statCard: { width: (width - 48) / 2, padding: 16, borderRadius: 16, marginBottom: 12 },
+  statIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  statValue: { fontSize: 28, fontWeight: 'bold', color: '#333', marginBottom: 4 },
+  statLabel: { fontSize: 12, color: '#666' },
+  section: { padding: 20, paddingBottom: 0 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
+  seeAll: { fontSize: 14, color: '#007AFF' },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  actionCard: { width: (width - 64) / 4, alignItems: 'center', padding: 12, backgroundColor: '#fff', borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  actionIcon: { width: 50, height: 50, borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  actionName: { fontSize: 11, color: '#333', textAlign: 'center' },
+  recentCard: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  recentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  recentTracking: { fontSize: 14, fontWeight: 'bold', color: '#007AFF' },
+  recentStatus: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12 },
+  recentStatusText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+  recentRoute: { fontSize: 12, color: '#666' },
+  emptyCard: { alignItems: 'center', padding: 30, backgroundColor: '#fff', borderRadius: 12 },
+  emptyText: { color: '#999', fontSize: 14, marginTop: 10 },
+  emptyButton: { marginTop: 12, backgroundColor: '#007AFF', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  emptyButtonText: { color: '#fff', fontSize: 12 },
+  infoCard: { flexDirection: 'row', alignItems: 'center', margin: 20, padding: 15, backgroundColor: '#E3F2FD', borderRadius: 12, gap: 12 },
+  infoContent: { flex: 1 },
+  infoTitle: { fontSize: 14, fontWeight: 'bold', color: '#007AFF' },
+  infoText: { fontSize: 12, color: '#666' },
 });
