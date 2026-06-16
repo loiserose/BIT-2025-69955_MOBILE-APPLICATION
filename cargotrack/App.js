@@ -5,6 +5,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import * as Font from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { initDatabase } from './services/database';
+import { initAuthDatabase } from './services/auth';
 
 // Import screens
 import LoginScreen from './screens/LoginScreen';
@@ -83,6 +84,7 @@ export default function App() {
   useEffect(() => {
     if (fontsLoaded) {
       initDatabase();
+      initAuthDatabase();  // ✅ ADDED THIS LINE
     }
   }, [fontsLoaded]);
 

@@ -11,6 +11,7 @@ import {
   Platform
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { registerUser } from '../services/auth';
 
 export default function RegisterScreen({ navigation, setIsLoggedIn }) {
   const [fullName, setFullName] = useState('');
@@ -19,36 +20,56 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
-    // Validation
+  const handleRegister = async () => {
+    // Validation 1: Check all fields filled
     if (!fullName || !email || !phone || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
 
+    // Validation 2: Check password match
     if (password !== confirmPassword) {
       Alert.alert('Error', 'Passwords do not match');
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
+    // Validation 3: Check password length
+    if (password.length < 4) {
+      Alert.alert('Error', 'Password must be at least 4 characters');
       return;
     }
 
+    // Validation 4: Check email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       Alert.alert('Error', 'Please enter a valid email');
       return;
     }
 
-    // For demo - store registration info (in real app, save to database)
-    Alert.alert(
-      'Success',
-      'Account created successfully! Please login.',
-      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-    );
+    // Validation 5: Check phone number (basic)
+    if (phone.length < 10) {
+      Alert.alert('Error', 'Please enter a valid phone number');
+      return;
+    }
+
+    setLoading(true);
+
+    // Save to database
+    const result = await registerUser(fullName, email, phone, password);
+    
+    setLoading(false);
+
+    if (result.success) {
+      Alert.alert(
+        'Success',
+        'Account created successfully! Please login.',
+        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+      );
+    } else {
+      Alert.alert('Registration Failed', result.error);
+    }
   };
 
   return (
@@ -123,8 +144,12 @@ export default function RegisterScreen({ navigation, setIsLoggedIn }) {
             />
           </View>
 
-          <TouchableOpacity style={styles.registerButton} onPress={handleRegister}>
-            <Text style={styles.registerButtonText}>Sign Up</Text>
+          <TouchableOpacity 
+            style={[styles.registerButton, loading && styles.registerButtonDisabled]} 
+            onPress={handleRegister}
+            disabled={loading}
+          >
+            <Text style={styles.registerButtonText}>{loading ? 'Creating Account...' : 'Sign Up'}</Text>
           </TouchableOpacity>
 
           <View style={styles.loginContainer}>
@@ -196,6 +221,9 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 24,
+  },
+  registerButtonDisabled: {
+    backgroundColor: '#99c2ff',
   },
   registerButtonText: {
     color: '#fff',
