@@ -8,6 +8,7 @@ import { initDatabase } from './services/database';
 import { initAuthDatabase } from './services/auth';
 
 // Import screens
+import DeviceFeaturesScreen from './screens/DeviceFeaturesScreen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
 import DashboardScreen from './screens/DashboardScreen';
@@ -31,7 +32,7 @@ function ShipmentsStack() {
     </Stack.Navigator>
   );
 }
-
+// Tab Navigator for main screens
 // Tab Navigator for main screens
 function MainTabs({ setIsLoggedIn }) {
   return (
@@ -49,6 +50,8 @@ function MainTabs({ setIsLoggedIn }) {
             iconName = focused ? 'stats-chart' : 'stats-chart-outline';
           } else if (route.name === 'Profile') {
             iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'Features') {
+            iconName = focused ? 'camera' : 'camera-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -61,9 +64,8 @@ function MainTabs({ setIsLoggedIn }) {
       <Tab.Screen name="Tracking" component={TrackingScreen} />
       <Tab.Screen name="Shipments" component={ShipmentsStack} />
       <Tab.Screen name="Reports" component={ReportsScreen} />
-      <Tab.Screen name="Profile">
-        {(props) => <ProfileScreen {...props} setIsLoggedIn={setIsLoggedIn} />}
-      </Tab.Screen>
+      <Tab.Screen name="Features" component={DeviceFeaturesScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 }
