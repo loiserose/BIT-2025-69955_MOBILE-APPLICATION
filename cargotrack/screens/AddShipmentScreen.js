@@ -8,7 +8,8 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { addShipment } from '../services/database';
@@ -22,33 +23,61 @@ export default function AddShipmentScreen({ navigation }) {
   const [status, setStatus] = useState('Pending');
   const [weight, setWeight] = useState('');
   const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false); // ✅ Moved to top with other states
 
   const statusOptions = ['Pending', 'In Transit', 'Delivered', 'Delayed'];
 
+  // Safe navigation function
+  const goBack = () => {
+    try {
+      if (navigation && navigation.goBack) {
+        navigation.goBack();
+      } else if (navigation && navigation.navigate) {
+        navigation.navigate('Shipments');
+      } else {
+        console.warn('Navigation not available');
+      }
+    } catch (error) {
+      console.log('Navigation error:', error);
+    }
+  };
+
   const handleAddShipment = async () => {
+    // Validation
     if (!trackingNumber || !senderName || !receiverName || !origin || !destination) {
       Alert.alert('Error', 'Please fill all required fields');
       return;
     }
 
-    const result = await addShipment({
-      trackingNumber,
-      senderName,
-      receiverName,
-      origin,
-      destination,
-      status,
-      weight: weight ? parseFloat(weight) : null,
-      description,
-      estimatedDelivery: null
-    });
+    // Start loading
+    setSaving(true);
 
-    if (result.success) {
-      Alert.alert('Success', 'Shipment added successfully!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } else {
-      Alert.alert('Error', result.error);
+    try {
+      const result = await addShipment({
+        trackingNumber,
+        senderName,
+        receiverName,
+        origin,
+        destination,
+        status,
+        weight: weight ? parseFloat(weight) : null,
+        description,
+        estimatedDelivery: null
+      });
+
+      setSaving(false);
+
+      if (result.success) {
+        Alert.alert('Success', 'Shipment added successfully!', [
+          { text: 'OK', onPress: goBack }
+        ]);
+      } else {
+        Alert.alert('Error', result.error);
+      }
+    } catch (error) {
+      setSaving(false);
+      Alert.alert('Error', 'Failed to add shipment. Please try again.');
+      console.error('Add shipment error:', error);
     }
   };
 
@@ -59,7 +88,7 @@ export default function AddShipmentScreen({ navigation }) {
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <TouchableOpacity onPress={goBack} style={styles.backButton}>
             <Ionicons name="arrow-back" size={24} color="#007AFF" />
           </TouchableOpacity>
           <Text style={styles.title}>Add New Shipment</Text>
@@ -105,8 +134,16 @@ export default function AddShipmentScreen({ navigation }) {
           <Text style={styles.label}>Description</Text>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Optional" value={description} onChangeText={setDescription} multiline numberOfLines={3} />
 
-          <TouchableOpacity style={styles.addButton} onPress={handleAddShipment}>
-            <Text style={styles.addButtonText}>Add Shipment</Text>
+          <TouchableOpacity 
+            style={[styles.addButton, saving && styles.addButtonDisabled]} 
+            onPress={handleAddShipment}
+            disabled={saving}
+          >
+            {saving ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.addButtonText}>Add Shipment</Text>
+            )}
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -130,5 +167,6 @@ const styles = StyleSheet.create({
   statusText: { color: '#333' },
   statusTextActive: { color: '#fff' },
   addButton: { backgroundColor: '#007AFF', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 24 },
+  addButtonDisabled: { backgroundColor: '#99c2ff' },
   addButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
 });

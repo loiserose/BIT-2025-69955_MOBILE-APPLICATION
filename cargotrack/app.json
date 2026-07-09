@@ -1,17 +1,18 @@
 {
   "expo": {
-    "name": "cargotrack-app",
-    "slug": "cargotrack-app",
+    "name": "CargoTrack Pro",
+    "slug": "cargotrack",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
+  "backgroundColor": "#007AFF",
+  "resizeMode": "contain"
+},
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -20,15 +21,29 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.cargotrackapp"
+      "package": "com.njerirozzy.cargotrack"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite",
-      "expo-font"
-    ]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow CargoTrack Pro to access your camera to capture shipment photos."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationPermission": "Allow CargoTrack Pro to access your location to track shipments."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "8378916f-128b-4a6a-b98f-fe2b32e2fad5"
+      }
+    }
   }
 }
