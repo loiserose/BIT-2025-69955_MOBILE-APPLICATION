@@ -7,9 +7,9 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-  "backgroundColor": "#007AFF",
-  "resizeMode": "contain"
-},
+      "backgroundColor": "#007AFF",
+      "resizeMode": "contain"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -38,7 +38,8 @@
         {
           "locationPermission": "Allow CargoTrack Pro to access your location to track shipments."
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "eas": {
